@@ -26,6 +26,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^5.0.69",
     "@clerk/localizations": "^3.2.1",
     "@clerk/nextjs": "^5.7.3",
     "@clerk/themes": "^2.1.36",
@@ -50,6 +51,7 @@
     "next": "^14.2.15",
     "next-intl": "^3.21.1",
     "next-themes": "^0.3.0",
+    "oauth-1.0a": "^2.2.6",
     "pg": "^8.13.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",

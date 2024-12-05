@@ -19,6 +19,8 @@ const isProtectedRoute = createRouteMatcher([
   '/:locale/dashboard(.*)',
   '/onboarding(.*)',
   '/:locale/onboarding(.*)',
+  '/service(.*)',
+  '/:locale/service(.*)',
   '/api(.*)',
   '/:locale/api(.*)',
 ]);
