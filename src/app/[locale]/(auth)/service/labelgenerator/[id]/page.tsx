@@ -32,7 +32,9 @@ export default function OrderPage(params: { params: { id: string } }) {
     try {
       setLoading(true);
       setError(null); // Reset error state
-      const response = await fetch(`/api/proxy?id=${orderId}`, { method: 'GET' });
+      const response = await fetch(`/api/proxy?id=${orderId}`, {
+        method: 'GET',
+      });
 
       if (!response.ok) {
         setError('The order number you entered is invalid. Please try again.');
@@ -51,7 +53,9 @@ export default function OrderPage(params: { params: { id: string } }) {
       });
 
       // Automatically select items with `quantityCommitted > 0`
-      const autoSelected = sortedItems.filter(item => item.quantityCommitted > 0).map(item => item.item);
+      const autoSelected = sortedItems
+        .filter(item => item.quantityCommitted > 0)
+        .map(item => item.item);
 
       if (!sortedItems.length) {
         setError('No items found for this order.');
@@ -59,7 +63,7 @@ export default function OrderPage(params: { params: { id: string } }) {
 
       setOrderData({ ...data.order, items: sortedItems });
       setSelectedRows(autoSelected);
-    } catch (err: any) {
+    } catch (err: string | any) {
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -85,15 +89,26 @@ export default function OrderPage(params: { params: { id: string } }) {
   // Handle row selection
   const handleRowSelect = useCallback((itemId: string, isSelected: boolean) => {
     setSelectedRows(prevSelected =>
-      isSelected ? [...prevSelected, itemId] : prevSelected.filter(id => id !== itemId),
+      isSelected
+        ? [...prevSelected, itemId]
+        : prevSelected.filter(id => id !== itemId),
     );
   }, []);
 
   // Handle "Mark All" functionality
-  const handleMarkAll = useCallback((isSelected: boolean) => {
-    const selectableItems = orderData?.items.filter((item: { quantityCommitted: number }) => item.quantityCommitted > 0);
-    setSelectedRows(isSelected ? selectableItems.map((item: { item: any }) => item.item) : []);
-  }, [orderData?.items]);
+  const handleMarkAll = useCallback(
+    (isSelected: boolean) => {
+      const selectableItems = orderData?.items.filter(
+        (item: { quantityCommitted: number }) => item.quantityCommitted > 0,
+      );
+      setSelectedRows(
+        isSelected
+          ? selectableItems.map((item: { item: any }) => item.item)
+          : [],
+      );
+    },
+    [orderData?.items],
+  );
 
   // Handle "Unmark All" functionality
   const handleUnMarkAll = useCallback(() => {
@@ -117,21 +132,30 @@ export default function OrderPage(params: { params: { id: string } }) {
       <div class="label" style="width: 100mm; height: 150mm; border: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 10px; box-sizing: border-box; page-break-after: always;">
         <!-- Header Section -->
         <div style="width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
-          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">Order #: ${orderData.tranId}</h1>
-          <p style="font-size: 14px; margin: 0; color: #555;">PO #: ${orderData.poNumber}</p>
+          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">Order #: ${
+            orderData.tranId
+          }</h1>
+          <p style="font-size: 14px; margin: 0; color: #555;">PO #: ${
+            orderData.poNumber
+          }</p>
         </div>
 
         <!-- Logo Section -->
         <div style="width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
-          <img src="https://www.mcc-ltd.com.au/bundles/mcctheme/themes/basetheme/images/mcc_logo.png" alt="Millennium Coupling Company" style="width: 50px; height: 50px; object-fit: contain;" priority />
+          <img src="/assets/images/clean-logo-black.png" alt="Millennium Coupling Company" style="width: 100px; height: 100px; object-fit: contain;" />
+
         </div>
   
         <!-- Item Information -->
         <div style="width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center;">
           <p style="font-size: 24px; font-weight: bold; margin: 0;">Item</p>
-          <p style="font-size: 22px; margin: 5px 0;">${item.item.split(' ')[0]}</p>
+          <p style="font-size: 22px; margin: 5px 0;">${
+            item.item.split(' ')[0]
+          }</p>
           <p style="font-size: 24px; font-weight: bold; margin: 0;">Quantity</p>
-          <p style="font-size: 22px; margin: 5px 0;">${item.quantityCommitted}</p>
+          <p style="font-size: 22px; margin: 5px 0;">${
+            item.quantityCommitted
+          }</p>
         </div>
   
         <!-- Footer Section -->
@@ -154,6 +178,8 @@ export default function OrderPage(params: { params: { id: string } }) {
     printWindow.document.write(`
     <html>
       <head>
+      <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           @page {
             size: 100mm 150mm;
@@ -206,11 +232,22 @@ export default function OrderPage(params: { params: { id: string } }) {
     </html>
   `);
     printWindow.document.close();
-    printWindow.print();
-    printWindow.close();
+    // Add a delay to ensure images load before printing
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300); // Adjust the delay if necessary
   }, [orderData, selectedRows]);
 
-  const { tranId, poNumber, items, entity, entityContact, shipAddress, transactionDate } = useMemo(() => {
+  const {
+    tranId,
+    poNumber,
+    items,
+    entity,
+    entityContact,
+    shipAddress,
+    transactionDate,
+  } = useMemo(() => {
     return orderData || {};
   }, [orderData]);
 
@@ -226,8 +263,13 @@ export default function OrderPage(params: { params: { id: string } }) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
         <div className="w-full max-w-lg rounded-lg bg-white p-8 text-center shadow-lg">
-          <h1 className="mb-4 text-3xl font-semibold text-red-600">Oops, something went wrong!</h1>
-          <p className="mb-6 text-gray-500">We couldn't process your request, but don't worry, you can go back and try again.</p>
+          <h1 className="mb-4 text-3xl font-semibold text-red-600">
+            Oops, something went wrong!
+          </h1>
+          <p className="mb-6 text-gray-500">
+            We couldn't process your request, but don't worry, you can go back
+            and try again.
+          </p>
           <Button
             className="rounded-lg bg-blue-500 px-6 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             onClick={() => router.back()}
@@ -258,7 +300,9 @@ export default function OrderPage(params: { params: { id: string } }) {
                 value={orderNumber}
                 onChange={e => setOrderNumber(e.target.value)}
               />
-              <Button className="bg-blue-500 hover:bg-blue-700" type="submit">Submit</Button>
+              <Button className="bg-blue-500 hover:bg-blue-700" type="submit">
+                Submit
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -310,13 +354,24 @@ export default function OrderPage(params: { params: { id: string } }) {
               <h2 className="mb-4 text-xl font-semibold">Order Items</h2>
             </div>
             <div className="space-x-4 space-y-2 text-right">
-              <Button className="bg-gray-500 hover:bg-gray-700" onClick={() => handleMarkAll(true)}>
+              <Button
+                className="bg-gray-500 hover:bg-gray-700"
+                onClick={() => handleMarkAll(true)}
+              >
                 Mark All
               </Button>
-              <Button className="bg-gray-500 hover:bg-gray-700" onClick={handleUnMarkAll}>
+              <Button
+                className="bg-gray-500 hover:bg-gray-700"
+                onClick={handleUnMarkAll}
+              >
                 Unmark All
               </Button>
-              <Button className="bg-blue-500 hover:bg-blue-700" onClick={printLabels}>Print Labels</Button>
+              <Button
+                className="bg-blue-500 hover:bg-blue-700"
+                onClick={printLabels}
+              >
+                Print Labels
+              </Button>
             </div>
           </div>
           <Table>
@@ -326,42 +381,53 @@ export default function OrderPage(params: { params: { id: string } }) {
                 <TableCell>Item</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell className="text-center">Quantity Ordered</TableCell>
-                <TableCell className="text-center">Quantity Committed</TableCell>
+                <TableCell className="text-center">
+                  Quantity Committed
+                </TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item: {
-                item?: string | null;
-                quantityCommitted?: number;
-                quantityOrdered?: number;
-              }) => {
-                // Fallbacks and type safety for `item` properties
-                const itemName = item?.item ? item.item.split(' ')[0] : 'Unknown Item';
-                const itemDescription = item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description';
-                const isDisabled = item?.quantityCommitted === 0;
+              {items.map(
+                (item: {
+                  item?: string | null;
+                  quantityCommitted?: number;
+                  quantityOrdered?: number;
+                }) => {
+                  // Fallbacks and type safety for `item` properties
+                  const itemName = item?.item
+                    ? item.item.split(' ')[0]
+                    : 'Unknown Item';
+                  const itemDescription = item?.item
+                    ? item.item.split(' ').slice(1).join(' ')
+                    : 'No Description';
+                  const isDisabled = item?.quantityCommitted === 0;
 
-                return (
-                  <TableRow key={item?.item || Math.random()} className="hover:bg-gray-100">
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.includes(item?.item || '')}
-                        onChange={e => handleRowSelect(item?.item || '', e.target.checked)}
-                        disabled={isDisabled}
-                      />
-                    </TableCell>
-                    <TableCell>{itemName}</TableCell>
-                    <TableCell>{itemDescription}</TableCell>
-                    <TableCell className="text-center">
-                      {item?.quantityOrdered ?? 0}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item?.quantityCommitted ?? 0}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-
+                  return (
+                    <TableRow
+                      key={item?.item || Math.random()}
+                      className="hover:bg-gray-100"
+                    >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(item?.item || '')}
+                          onChange={e =>
+                            handleRowSelect(item?.item || '', e.target.checked)}
+                          disabled={isDisabled}
+                        />
+                      </TableCell>
+                      <TableCell>{itemName}</TableCell>
+                      <TableCell>{itemDescription}</TableCell>
+                      <TableCell className="text-center">
+                        {item?.quantityOrdered ?? 0}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {item?.quantityCommitted ?? 0}
+                      </TableCell>
+                    </TableRow>
+                  );
+                },
+              )}
             </TableBody>
           </Table>
         </CardContent>

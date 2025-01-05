@@ -23,6 +23,7 @@ const isProtectedRoute = createRouteMatcher([
   '/:locale/service(.*)',
   '/api(.*)',
   '/:locale/api(.*)',
+  '/',
 ]);
 
 export default function middleware(
