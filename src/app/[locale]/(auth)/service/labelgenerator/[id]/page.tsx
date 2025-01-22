@@ -132,11 +132,11 @@ export default function OrderPage(params: { params: { id: string } }) {
       <div class="label" style="width: 100mm; height: 150mm; border: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 10px; box-sizing: border-box; page-break-after: always;">
         <!-- Header Section -->
         <div style="width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
-          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">Order #: ${
-            orderData.tranId
-          }</h1>
-          <p style="font-size: 14px; margin: 0; color: #555;">PO #: ${
+          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">PO #: ${
             orderData.poNumber
+          }</h1>
+          <p style="font-size: 14px; margin: 0; color: #555;">Order #: ${
+            orderData.tranId
           }</p>
         </div>
 
