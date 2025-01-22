@@ -410,6 +410,7 @@ export default function OrderPage(params: { params: { id: string } }) {
                       <TableCell>
                         <input
                           type="checkbox"
+                          className="form-checkbox size-5 text-blue-600"
                           checked={selectedRows.includes(item?.item || '')}
                           onChange={e =>
                             handleRowSelect(item?.item || '', e.target.checked)}
