@@ -142,17 +142,26 @@ export default function OrderPage(params: { params: { id: string } }) {
 
         <!-- Logo Section -->
         <div style="width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
-          <img src="/assets/images/clean-logo-black.png" alt="Millennium Coupling Company" style="width: 100px; height: 100px; object-fit: contain;" />
+          <img src="/assets/images/mcc-logo-grayscale.png" alt="Millennium Coupling Company" style="width: 226px; height: 100px; object-fit: contain;" />
 
         </div>
   
         <!-- Item Information -->
         <div style="width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center;">
-          <p style="font-size: 24px; font-weight: bold; margin: 0;">Item</p>
+          <p style="font-size: 24px; font-weight: bold; margin: 0;">Part Number</p>
           <p style="font-size: 22px; margin: 5px 0;">${
             item.item.split(' ')[0]
           }</p>
-          <p style="font-size: 24px; font-weight: bold; margin: 0;">Quantity</p>
+
+          <p style="font-size: 24px; font-weight: bold; margin: 0;">Description</p>
+          <p style="font-size: 18px; margin: 5px 0;">${
+            item?.item
+              ? item.item.split(' ').slice(1).join(' ')
+              : 'No Description'
+          }</p>
+          
+
+          <p style="font-size: 24px; font-weight: bold; margin-top: 20;">Quantity</p>
           <p style="font-size: 22px; margin: 5px 0;">${
             item.quantityCommitted
           }</p>
