@@ -136,7 +136,7 @@ export default function OrderPage(params: { params: { id: string } }) {
             orderData.poNumber
           }</h1>
           <p style="font-size: 14px; margin: 0; color: #555;">Order #: ${
-            orderData.tranId
+            orderData.tranId.toUpperCase()
           }</p>
         </div>
 
