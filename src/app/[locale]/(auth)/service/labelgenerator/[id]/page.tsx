@@ -52,9 +52,16 @@ export default function OrderPage(params: { params: { id: string } }) {
         return 0;
       });
 
-      // Automatically select items with `quantityCommitted > 0`
+      // Get the isSalesOrder flag from the fetched order data
+      const isSalesOrder = data.order.isSalesOrder;
+
+      // Automatically select items with the appropriate quantity condition
       const autoSelected = sortedItems
-        .filter(item => item.quantityCommitted > 0)
+        .filter(
+          isSalesOrder
+            ? (item: { quantityCommitted: number }) => item.quantityCommitted > 0
+            : (item: { quantityOrdered: number }) => item.quantityOrdered > 0,
+        )
         .map(item => item.item);
 
       if (!sortedItems.length) {
@@ -83,6 +90,7 @@ export default function OrderPage(params: { params: { id: string } }) {
       setError('Please enter a valid order number.');
       return;
     }
+
     router.push(orderNumber);
   };
 
@@ -99,7 +107,9 @@ export default function OrderPage(params: { params: { id: string } }) {
   const handleMarkAll = useCallback(
     (isSelected: boolean) => {
       const selectableItems = orderData?.items.filter(
-        (item: { quantityCommitted: number }) => item.quantityCommitted > 0,
+        orderData?.isSalesOrder
+          ? (item: { quantityCommitted: number }) => item.quantityCommitted > 0
+          : (item: { quantityOrdered: number }) => item.quantityOrdered > 0,
       );
       setSelectedRows(
         isSelected
@@ -128,15 +138,13 @@ export default function OrderPage(params: { params: { id: string } }) {
 
     const printContent = selectedItems
       .map(
-        (item: { item: string; quantityCommitted: any }) => `
+        (item: { itemId: string; item: string; quantityCommitted: any; quantityOrdered: any }) => `
       <div class="label" style="width: 100mm; height: 150mm; border: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 10px; box-sizing: border-box; page-break-after: always;">
         <!-- Header Section -->
         <div style="width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
-          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">PO #: ${
-            orderData.poNumber
+          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">PO #: ${orderData.poNumber
           }</h1>
-          <p style="font-size: 14px; margin: 0; color: #555;">Order #: ${
-            orderData.tranId.toUpperCase()
+          <p style="font-size: 14px; margin: 0; color: #555;">${orderData.isSalesOrder ? 'Order #' : 'Fulfillment #'}: ${orderData.tranId.toUpperCase()
           }</p>
         </div>
 
@@ -149,22 +157,24 @@ export default function OrderPage(params: { params: { id: string } }) {
         <!-- Item Information -->
         <div style="width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center;">
           <p style="font-size: 24px; font-weight: bold; margin: 0;">Part Number</p>
-          <p style="font-size: 22px; margin: 5px 0;">${
-            item.item.split(' ')[0]
-          }</p>
+          <p style="font-size: 22px; margin: 5px 0;">${orderData.isSalesOrder
+            ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
+            : item.itemId}
+        </p>
 
           <p style="font-size: 24px; font-weight: bold; margin: 0;">Description</p>
-          <p style="font-size: 18px; margin: 5px 0;">${
-            item?.item
-              ? item.item.split(' ').slice(1).join(' ')
-              : 'No Description'
+          <p style="font-size: 18px; margin: 5px 0;">${orderData.isSalesOrder
+              ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
+              : item.item
           }</p>
           
 
           <p style="font-size: 24px; font-weight: bold; margin-top: 20;">Quantity</p>
-          <p style="font-size: 22px; margin: 5px 0;">${
-            item.quantityCommitted
-          }</p>
+          <p style="font-size: 22px; margin: 5px 0;">${orderData.isSalesOrder
+              ? item.quantityCommitted
+              : item.quantityOrdered
+          }
+            </p>
         </div>
   
         <!-- Footer Section -->
@@ -389,26 +399,35 @@ export default function OrderPage(params: { params: { id: string } }) {
                 <TableCell>Select</TableCell>
                 <TableCell>Item</TableCell>
                 <TableCell>Description</TableCell>
-                <TableCell className="text-center">Quantity Ordered</TableCell>
-                <TableCell className="text-center">
-                  Quantity Committed
-                </TableCell>
+                {orderData?.isSalesOrder
+                  ? (
+                      <TableCell className="text-center">Quantity Ordered</TableCell>
+                    )
+                  : (
+                      <TableCell className="text-center">Quantity Fulfilled</TableCell>
+                    )}
+                {orderData?.isSalesOrder
+                  ? (
+                      <TableCell className="text-center">Quantity Committed</TableCell>
+                    )
+                  : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map(
                 (item: {
+                  itemId: string;
                   item?: string | null;
                   quantityCommitted?: number;
                   quantityOrdered?: number;
                 }) => {
                   // Fallbacks and type safety for `item` properties
-                  const itemName = item?.item
-                    ? item.item.split(' ')[0]
-                    : 'Unknown Item';
-                  const itemDescription = item?.item
-                    ? item.item.split(' ').slice(1).join(' ')
-                    : 'No Description';
+                  const itemName = orderData?.isSalesOrder
+                    ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
+                    : item.itemId;
+                  const itemDescription = orderData?.isSalesOrder
+                    ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
+                    : item.item;
                   const isDisabled = item?.quantityCommitted === 0;
 
                   return (
@@ -431,9 +450,13 @@ export default function OrderPage(params: { params: { id: string } }) {
                       <TableCell className="text-center">
                         {item?.quantityOrdered ?? 0}
                       </TableCell>
-                      <TableCell className="text-center">
-                        {item?.quantityCommitted ?? 0}
-                      </TableCell>
+                      {orderData?.isSalesOrder
+                        ? (
+                            <TableCell className="text-center">
+                              {item?.quantityCommitted ?? 0}
+                            </TableCell>
+                          )
+                        : null}
                     </TableRow>
                   );
                 },
