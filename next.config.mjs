@@ -50,12 +50,12 @@ const securityHeaders = [
     value: [
       'default-src \'self\'',
       // Allow Clerk domains
-      'script-src \'self\' \'unsafe-eval\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
-      'style-src \'self\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
+      'script-src \'self\' \'unsafe-eval\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://*.sonava.com.au',
+      'style-src \'self\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://*.sonava.com.au',
       'img-src \'self\' data: https: blob:',
-      'font-src \'self\' data: https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
-      'frame-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
-      'connect-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://api.netsuite.com',
+      'font-src \'self\' data: https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://*.sonava.com.au',
+      'frame-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://*.sonava.com.au',
+      'connect-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://*.sonava.com.au https://api.netsuite.com',
       // Add any other required domains for your application
     ].join('; '),
   },
