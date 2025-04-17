@@ -1,7 +1,10 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PlusCircle, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,36 +16,117 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useToast } from '@/components/ui/use-toast';
 
-export default function OrderPage(params: { params: { id: string } }) {
-  const { id } = params.params;
+// Types
+type SplitItem = {
+  id: string;
+  quantity: number;
+  parentItemId: string;
+};
+
+type ItemSplits = {
+  [key: string]: SplitItem[];
+};
+
+type OrderItem = {
+  item: string;
+  itemId: string;
+  quantityCommitted: number;
+  quantityOrdered: number;
+  description?: string;
+};
+
+type NetsuiteOrder = {
+  tranId: string;
+  poNumber: string;
+  items: OrderItem[];
+  entity: string;
+  entityContact: string;
+  shipAddress: string;
+  transactionDate: string;
+  isSalesOrder: boolean;
+};
+
+type PrintItem = {
+  poNumber: string;
+  tranId: string;
+  isSalesOrder: boolean;
+  quantity: number;
+  cartonInfo?: string;
+} & OrderItem;
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
+
+// Main content component
+function OrderPageContent(props: { params: { id: string } }) {
+  const { id } = props.params;
   const router = useRouter();
+  const { toast } = useToast();
+  const { getToken } = useAuth();
 
   // State for Order Lookup
   const [orderNumber, setOrderNumber] = useState('');
-
-  // State for order data
-  const [orderData, setOrderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [splitItems, setSplitItems] = useState<ItemSplits>({});
+  const [orderData, setOrderData] = useState<NetsuiteOrder | null>(null);
 
   // Fetching order data
   const fetchOrderData = useCallback(async (orderId: string) => {
     try {
       setLoading(true);
-      setError(null); // Reset error state
+      setError(null);
+
+      const token = await getToken();
+
       const response = await fetch(`/api/proxy?id=${orderId}`, {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setError('You must be logged in to access this resource.');
+          return;
+        }
+        if (response.status === 403) {
+          setError('You do not have permission to access this resource.');
+          return;
+        }
         setError('The order number you entered is invalid. Please try again.');
+        return;
       }
+
       const data = await response.json();
 
-      // Sort items: Items with `quantityCommitted === 0` go to the bottom
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
+
+      // Sort items: Items with no committed quantity go to the bottom
       const sortedItems = [...data.order.items].sort((a, b) => {
+        if (!a.quantityCommitted && b.quantityCommitted) {
+          return 1;
+        }
+        if (a.quantityCommitted && !b.quantityCommitted) {
+          return -1;
+        }
         if (a.quantityCommitted === 0 && b.quantityCommitted > 0) {
           return 1;
         }
@@ -75,7 +159,7 @@ export default function OrderPage(params: { params: { id: string } }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getToken]);
 
   useEffect(() => {
     if (id) {
@@ -83,11 +167,23 @@ export default function OrderPage(params: { params: { id: string } }) {
     }
   }, [id, fetchOrderData]);
 
+  // Remove the initialization effect since we don't want to create splits initially
+  useEffect(() => {
+    if (orderData?.items) {
+      const initialSplits: ItemSplits = {};
+      setSplitItems(initialSplits);
+    }
+  }, [orderData]);
+
   // Handle order number form submission
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     if (!orderNumber.trim()) {
-      setError('Please enter a valid order number.');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please enter a valid order number.',
+      });
       return;
     }
 
@@ -106,18 +202,23 @@ export default function OrderPage(params: { params: { id: string } }) {
   // Handle "Mark All" functionality
   const handleMarkAll = useCallback(
     (isSelected: boolean) => {
-      const selectableItems = orderData?.items.filter(
-        orderData?.isSalesOrder
-          ? (item: { quantityCommitted: number }) => item.quantityCommitted > 0
-          : (item: { quantityOrdered: number }) => item.quantityOrdered > 0,
+      if (!orderData?.items) {
+        return;
+      }
+
+      const selectableItems = orderData.items.filter(
+        orderData.isSalesOrder
+          ? (item: OrderItem) => item.quantityCommitted > 0
+          : (item: OrderItem) => item.quantityOrdered > 0,
       );
+
       setSelectedRows(
         isSelected
-          ? selectableItems.map((item: { item: any }) => item.item)
+          ? selectableItems.map(item => item.item)
           : [],
       );
     },
-    [orderData?.items],
+    [orderData],
   );
 
   // Handle "Unmark All" functionality
@@ -125,20 +226,311 @@ export default function OrderPage(params: { params: { id: string } }) {
     setSelectedRows([]);
   }, []);
 
-  // Handle printing labels
-  const printLabels = useCallback(() => {
-    if (!selectedRows || !selectedRows.length) {
-      setError('Please select at least one item to print labels.');
+  // Function to add a split
+  const addSplit = useCallback((item: OrderItem) => {
+    const itemKey = item.item || item.itemId;
+    const totalQuantity = orderData?.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
+
+    if (!totalQuantity) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot split item',
+        description: 'This item has no quantity to split.',
+      });
       return;
     }
 
-    const selectedItems = orderData.items.filter((item: { item: string }) =>
+    const currentSplits = splitItems[itemKey] || [];
+
+    // If no splits exist, create initial two splits
+    if (currentSplits.length === 0) {
+      const firstSplitQuantity = Math.floor(totalQuantity / 2);
+      const secondSplitQuantity = totalQuantity - firstSplitQuantity;
+
+      const newSplits = [
+        {
+          id: crypto.randomUUID(),
+          quantity: firstSplitQuantity,
+          parentItemId: itemKey,
+        },
+        {
+          id: crypto.randomUUID(),
+          quantity: secondSplitQuantity,
+          parentItemId: itemKey,
+        },
+      ];
+
+      setSplitItems(prev => ({
+        ...prev,
+        [itemKey]: newSplits,
+      }));
+
+      toast({
+        title: 'Split created',
+        description: `Created 2 cartons with quantities ${firstSplitQuantity} and ${secondSplitQuantity}`,
+      });
+    } else {
+      // Calculate current total of all splits
+      const currentTotal = currentSplits.reduce((sum, split) => sum + split.quantity, 0);
+      const remainingToSplit = totalQuantity - currentTotal;
+
+      // If we have remaining quantity that can be split
+      if (remainingToSplit > 0) {
+        // Just create a new carton with the remaining quantity
+        const updatedSplits = [...currentSplits];
+        updatedSplits.push({
+          id: crypto.randomUUID(),
+          quantity: remainingToSplit,
+          parentItemId: itemKey,
+        });
+
+        setSplitItems(prev => ({
+          ...prev,
+          [itemKey]: updatedSplits,
+        }));
+
+        toast({
+          title: 'New carton added',
+          description: `Added carton with quantity ${remainingToSplit}`,
+        });
+      } else {
+        // If no remaining quantity, split the largest existing carton
+        const largestSplit = [...currentSplits].sort((a, b) => b.quantity - a.quantity)[0];
+        if (!largestSplit || largestSplit.quantity <= 1) {
+          toast({
+            variant: 'destructive',
+            title: 'Cannot split further',
+            description: 'No carton has enough quantity to split.',
+          });
+          return;
+        }
+
+        const splitIndex = currentSplits.findIndex(split => split.id === largestSplit.id);
+        if (splitIndex === -1) {
+          return;
+        }
+
+        const newSplitQuantity = Math.floor(largestSplit.quantity / 2);
+        const remainingQuantity = largestSplit.quantity - newSplitQuantity;
+
+        const updatedSplits = [...currentSplits];
+        updatedSplits[splitIndex] = {
+          ...largestSplit,
+          quantity: remainingQuantity,
+        };
+
+        updatedSplits.push({
+          id: crypto.randomUUID(),
+          quantity: newSplitQuantity,
+          parentItemId: itemKey,
+        });
+
+        setSplitItems(prev => ({
+          ...prev,
+          [itemKey]: updatedSplits,
+        }));
+
+        toast({
+          title: 'Split created',
+          description: `Split carton into ${remainingQuantity} and ${newSplitQuantity}`,
+        });
+      }
+    }
+  }, [orderData, splitItems, toast]);
+
+  // Function to validate split quantities
+  const validateSplitQuantities = useCallback(() => {
+    if (!orderData?.items) {
+      return [];
+    }
+
+    const invalidItems = [];
+
+    for (const item of orderData.items) {
+      const itemKey = item.item || item.itemId;
+      const splits = splitItems[itemKey];
+      const totalQuantity = orderData.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
+
+      if (splits && splits.length > 0) {
+        const splitSum = splits.reduce((sum, split) => sum + split.quantity, 0);
+        if (splitSum !== totalQuantity) {
+          invalidItems.push(itemKey);
+        }
+      }
+    }
+
+    return invalidItems;
+  }, [orderData, splitItems]);
+
+  // Function to remove a split
+  const removeSplit = useCallback((itemKey: string) => {
+    setSplitItems((prev) => {
+      const currentSplits = prev[itemKey];
+      if (!currentSplits || currentSplits.length === 0) {
+        return prev;
+      }
+
+      // If we're about to be left with only one carton (deleting second-to-last)
+      if (currentSplits.length === 2) {
+        const firstCarton = currentSplits[0];
+        const secondCarton = currentSplits[1];
+
+        if (!firstCarton || !secondCarton) {
+          return prev;
+        }
+
+        // Remove all splits to restore header quantity
+        const newSplits = { ...prev };
+        delete newSplits[itemKey];
+
+        toast({
+          title: 'Splits removed',
+          description: 'Restored quantity to header level',
+        });
+
+        return newSplits;
+      }
+
+      // For more than 2 cartons, merge last into second-last
+      const lastCarton = currentSplits[currentSplits.length - 1];
+      const secondLastCarton = currentSplits[currentSplits.length - 2];
+
+      if (!lastCarton || !secondLastCarton) {
+        return prev;
+      }
+
+      const updatedSplits = currentSplits.slice(0, -1);
+      const newQuantity = secondLastCarton.quantity + lastCarton.quantity;
+
+      updatedSplits[updatedSplits.length - 1] = {
+        ...secondLastCarton,
+        quantity: newQuantity,
+      };
+
+      toast({
+        title: 'Carton merged',
+        description: `Merged last carton into previous (new quantity: ${newQuantity})`,
+      });
+
+      return {
+        ...prev,
+        [itemKey]: updatedSplits,
+      };
+    });
+  }, [toast]);
+
+  // Function to update split quantity with validation
+  const updateSplitQuantity = useCallback((itemKey: string, splitId: string, newQuantity: number) => {
+    const currentSplits = splitItems[itemKey];
+    if (!currentSplits?.length) {
+      return;
+    }
+
+    const item = orderData?.items.find((i: OrderItem) => (i.item || i.itemId) === itemKey);
+    if (!item) {
+      return;
+    }
+
+    const totalQuantity = orderData?.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
+    const updatedSplits = [...currentSplits];
+    const splitIndex = updatedSplits.findIndex(split => split.id === splitId);
+
+    if (splitIndex === -1) {
+      return;
+    }
+
+    // Calculate the total of other splits
+    const otherSplitsTotal = updatedSplits
+      .filter((_, index) => index !== splitIndex)
+      .reduce((sum, split) => sum + split.quantity, 0);
+
+    // Ensure new quantity doesn't exceed total available
+    const maxAllowed = totalQuantity - otherSplitsTotal;
+    const validQuantity = Math.min(Math.max(0, newQuantity), maxAllowed);
+
+    if (validQuantity !== newQuantity) {
+      toast({
+        variant: 'destructive',
+        title: 'Quantity adjusted',
+        description: `Quantity limited to ${validQuantity} to match total committed quantity`,
+      });
+    }
+
+    if (updatedSplits[splitIndex]) {
+      updatedSplits[splitIndex].quantity = validQuantity;
+    }
+
+    setSplitItems(prev => ({
+      ...prev,
+      [itemKey]: updatedSplits,
+    }));
+  }, [splitItems, orderData, toast]);
+
+  // Modify the printLabels function to handle split quantities correctly
+  const printLabels = useCallback(() => {
+    if (!selectedRows || !selectedRows.length) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot print labels',
+        description: 'Please select at least one item to print labels.',
+      });
+      return;
+    }
+
+    if (!orderData) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot print labels',
+        description: 'No order data available.',
+      });
+      return;
+    }
+
+    // Validate split quantities before printing
+    const invalidItems = validateSplitQuantities();
+    if (invalidItems.length > 0) {
+      const itemNames = invalidItems.map((itemKey) => {
+        const item = orderData.items.find(i => (i.item || i.itemId) === itemKey);
+        return orderData.isSalesOrder
+          ? (item?.item ? item.item.split(' ')[0] : itemKey)
+          : item?.itemId || itemKey;
+      });
+
+      toast({
+        variant: 'destructive',
+        title: 'Cannot print labels',
+        description: `The following items have split quantities that don't match their total committed quantity: ${itemNames.join(', ')}`,
+      });
+      return;
+    }
+
+    const selectedItems = orderData.items.filter(item =>
       selectedRows.includes(item.item),
     );
 
-    const printContent = selectedItems
-      .map(
-        (item: { itemId: string; item: string; quantityCommitted: any; quantityOrdered: any }) => `
+    const printItems = selectedItems.flatMap((item: any) => {
+      const itemKey = item.item || item.itemId;
+      const splits = splitItems[itemKey];
+
+      if (!splits || splits.length === 0) {
+        // If no splits, print the full quantity
+        return [{
+          ...item,
+          quantity: orderData?.isSalesOrder ? item.quantityCommitted : item.quantityOrdered,
+          cartonInfo: null, // No carton info for unsplit items
+        }];
+      }
+
+      // If splits exist, print each split quantity with carton information
+      return splits.map((split, index) => ({
+        ...item,
+        quantity: split.quantity,
+        cartonInfo: `Split ${index + 1} of ${splits.length}`, // Add carton count info
+      }));
+    });
+
+    const printContent = printItems
+      .map((item: PrintItem) => `
       <div class="label" style="width: 100mm; height: 150mm; border: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 10px; box-sizing: border-box; page-break-after: always;">
         <!-- Header Section -->
         <div style="width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
@@ -151,7 +543,6 @@ export default function OrderPage(params: { params: { id: string } }) {
         <!-- Logo Section -->
         <div style="width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
           <img src="/assets/images/mcc-logo-grayscale.png" alt="Millennium Coupling Company" style="width: 226px; height: 100px; object-fit: contain;" />
-
         </div>
   
         <!-- Item Information -->
@@ -160,21 +551,17 @@ export default function OrderPage(params: { params: { id: string } }) {
           <p style="font-size: 22px; margin: 5px 0;">${orderData.isSalesOrder
             ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
             : item.itemId}
-        </p>
+          </p>
 
           <p style="font-size: 24px; font-weight: bold; margin: 0;">Description</p>
           <p style="font-size: 18px; margin: 5px 0;">${orderData.isSalesOrder
-              ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
-              : item.item
-          }</p>
-          
+            ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
+            : item.item}
+          </p>
 
           <p style="font-size: 24px; font-weight: bold; margin-top: 20;">Quantity</p>
-          <p style="font-size: 22px; margin: 5px 0;">${orderData.isSalesOrder
-              ? item.quantityCommitted
-              : item.quantityOrdered
-          }
-            </p>
+          <p style="font-size: 22px; margin: 5px 0;">${item.quantity}</p>
+          ${item.cartonInfo ? `<p style="font-size: 16px; margin: 5px 0; color: #666;">${item.cartonInfo}</p>` : ''}
         </div>
   
         <!-- Footer Section -->
@@ -183,8 +570,7 @@ export default function OrderPage(params: { params: { id: string } }) {
           <p style="font-size: 12px; color: #777; margin: 0;">www.mcc-ltd.com.au</p>
         </div>
       </div>
-    `,
-      )
+    `)
       .join('');
 
     const printWindow = window.open('', '_blank');
@@ -256,7 +642,7 @@ export default function OrderPage(params: { params: { id: string } }) {
       printWindow.print();
       printWindow.close();
     }, 300); // Adjust the delay if necessary
-  }, [orderData, selectedRows]);
+  }, [orderData, selectedRows, splitItems, validateSplitQuantities, toast]);
 
   const {
     tranId,
@@ -266,8 +652,20 @@ export default function OrderPage(params: { params: { id: string } }) {
     entityContact,
     shipAddress,
     transactionDate,
-  } = useMemo(() => {
-    return orderData || {};
+  } = useMemo((): NetsuiteOrder => {
+    if (!orderData) {
+      return {
+        tranId: '',
+        poNumber: '',
+        items: [],
+        entity: '',
+        entityContact: '',
+        shipAddress: '',
+        transactionDate: '',
+        isSalesOrder: false,
+      };
+    }
+    return orderData;
   }, [orderData]);
 
   if (loading) {
@@ -319,7 +717,10 @@ export default function OrderPage(params: { params: { id: string } }) {
                 value={orderNumber}
                 onChange={e => setOrderNumber(e.target.value)}
               />
-              <Button className="bg-blue-500 hover:bg-blue-700" type="submit">
+              <Button
+                className="bg-blue-500 hover:bg-blue-700"
+                type="submit"
+              >
                 Submit
               </Button>
             </form>
@@ -399,72 +800,125 @@ export default function OrderPage(params: { params: { id: string } }) {
                 <TableCell>Select</TableCell>
                 <TableCell>Item</TableCell>
                 <TableCell>Description</TableCell>
-                {orderData?.isSalesOrder
-                  ? (
-                      <TableCell className="text-center">Quantity Ordered</TableCell>
-                    )
-                  : (
-                      <TableCell className="text-center">Quantity Fulfilled</TableCell>
-                    )}
-                {orderData?.isSalesOrder
-                  ? (
-                      <TableCell className="text-center">Quantity Committed</TableCell>
-                    )
-                  : null}
+                <TableCell className="text-center">Quantity Ordered</TableCell>
+                <TableCell className="text-center">Quantity Committed</TableCell>
+                <TableCell className="text-center">Actions</TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map(
-                (item: {
-                  itemId: string;
-                  item?: string | null;
-                  quantityCommitted?: number;
-                  quantityOrdered?: number;
-                }) => {
-                  // Fallbacks and type safety for `item` properties
-                  const itemName = orderData?.isSalesOrder
-                    ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
-                    : item.itemId;
-                  const itemDescription = orderData?.isSalesOrder
-                    ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
-                    : item.item;
-                  const isDisabled = item?.quantityCommitted === 0;
+              {items.map((item: OrderItem) => {
+                const itemKey = item.item || item.itemId;
+                const splits = splitItems[itemKey] || [];
+                const isDisabled = !item?.quantityCommitted || item.quantityCommitted === 0;
+                const totalQuantity = orderData?.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
+                const hasSplits = splits.length > 0;
 
-                  return (
-                    <TableRow
-                      key={item?.item || Math.random()}
-                      className="hover:bg-gray-100"
-                    >
+                return (
+                  <React.Fragment key={itemKey}>
+                    {/* Header row */}
+                    <TableRow className="bg-gray-50">
                       <TableCell>
                         <input
                           type="checkbox"
-                          className="form-checkbox size-5 text-blue-600"
-                          checked={selectedRows.includes(item?.item || '')}
-                          onChange={e =>
-                            handleRowSelect(item?.item || '', e.target.checked)}
+                          className="size-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={selectedRows.includes(itemKey)}
+                          onChange={e => handleRowSelect(itemKey, e.target.checked)}
                           disabled={isDisabled}
                         />
                       </TableCell>
-                      <TableCell>{itemName}</TableCell>
-                      <TableCell>{itemDescription}</TableCell>
+                      <TableCell>
+                        {orderData?.isSalesOrder
+                          ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
+                          : item.itemId}
+                      </TableCell>
+                      <TableCell>
+                        {orderData?.isSalesOrder
+                          ? (item?.item ? item.item.split(' ').slice(1).join(' ') : 'No Description')
+                          : item.item}
+                      </TableCell>
                       <TableCell className="text-center">
                         {item?.quantityOrdered ?? 0}
                       </TableCell>
-                      {orderData?.isSalesOrder
-                        ? (
-                            <TableCell className="text-center">
-                              {item?.quantityCommitted ?? 0}
-                            </TableCell>
-                          )
-                        : null}
+                      <TableCell className="text-center">
+                        {!hasSplits ? totalQuantity : null}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {!isDisabled && (
+                          <div className="flex items-center justify-center space-x-2">
+                            <button
+                              type="button"
+                              className="inline-flex size-8 items-center justify-center rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addSplit(item);
+                              }}
+                            >
+                              <PlusCircle className="size-4 text-blue-500" />
+                            </button>
+                            {hasSplits && (
+                              <button
+                                type="button"
+                                className="inline-flex size-8 items-center justify-center rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeSplit(itemKey);
+                                }}
+                              >
+                                <Trash className="size-4 text-red-500" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  );
-                },
-              )}
+                    {/* Split rows */}
+                    {hasSplits && splits.map((split, index) => (
+                      <TableRow
+                        key={split.id}
+                        className="bg-white hover:bg-gray-50"
+                      >
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="pl-8 italic text-gray-500">
+                          Carton
+                          {' '}
+                          {index + 1}
+                        </TableCell>
+                        <TableCell />
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <Input
+                              type="number"
+                              value={split.quantity}
+                              onChange={(e) => {
+                                const newQuantity = Number.parseInt(e.target.value) || 0;
+                                updateSplitQuantity(itemKey, split.id, newQuantity);
+                              }}
+                              className="w-20 text-center"
+                              min="0"
+                              max={totalQuantity}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Wrap with QueryClientProvider
+export default function OrderPage(props: { params: { id: string } }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <OrderPageContent params={props.params} />
+    </QueryClientProvider>
   );
 }

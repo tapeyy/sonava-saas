@@ -15,6 +15,52 @@ const bundleAnalyzer = withBundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
+// Security headers
+const securityHeaders = [
+  {
+    key: 'X-DNS-Prefetch-Control',
+    value: 'on',
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  },
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY',
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff',
+  },
+  {
+    key: 'X-XSS-Protection',
+    value: '1; mode=block',
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'strict-origin-when-cross-origin',
+  },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+  },
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      'default-src \'self\'',
+      // Allow Clerk domains
+      'script-src \'self\' \'unsafe-eval\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
+      'style-src \'self\' \'unsafe-inline\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
+      'img-src \'self\' data: https: blob:',
+      'font-src \'self\' data: https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
+      'frame-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com',
+      'connect-src \'self\' https://*.clerk.accounts.dev https://clerk.com https://*.clerk.com https://api.netsuite.com',
+      // Add any other required domains for your application
+    ].join('; '),
+  },
+];
+
 /** @type {import('next').NextConfig} */
 export default withSentryConfig(
   bundleAnalyzer(
@@ -27,6 +73,12 @@ export default withSentryConfig(
       experimental: {
         serverComponentsExternalPackages: ['@electric-sql/pglite'],
       },
+      headers: async () => [
+        {
+          source: '/:path*',
+          headers: securityHeaders,
+        },
+      ],
     }),
   ),
   {

@@ -7,22 +7,22 @@ const sendDefaults = {
   sendDegraded: true,
 };
 
-// FIXME: Add your production URL
-const productionURL = 'https://react-saas.com';
+// TODO: Add your production URL
+const productionURL = 'https://sonava.com.au';
 
 const emailChannel = new EmailAlertChannel('email-channel-1', {
-  // FIXME: add your own email address, Checkly will send you an email notification if a check fails
-  address: 'contact@creativedesignsguru.com',
+  // TODO: add your own email address, Checkly will send you an email notification if a check fails
+  address: 'sam.tape@mcc-ltd.com.au',
   ...sendDefaults,
 });
 
 export const config = defineConfig({
-  // FIXME: Add your own project name, logical ID, and repository URL
+  // TODO: Add your own project name, logical ID, and repository URL
   projectName: 'SaaS Boilerplate',
   logicalId: 'saas-boilerplate',
   repoUrl: 'https://github.com/ixartz/Next-js-Boilerplate',
   checks: {
-    locations: ['us-east-1', 'eu-west-1'],
+    locations: ['au-east-1'],
     tags: ['website'],
     runtimeId: '2024.02',
     browserChecks: {
