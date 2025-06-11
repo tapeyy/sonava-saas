@@ -1,45 +1,70 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export default function Home() {
-  const [orderNumber, setOrderNumber] = useState('');
-  const router = useRouter();
-  const pathname = usePathname();
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/use-toast';
+import { useBarcodeScan } from '@/hooks/useBarcodeScan';
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
+export default function LabelGeneratorPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [orderNumber, setOrderNumber] = useState('');
+
+  // Add barcode scanning
+  const { isValidScan } = useBarcodeScan();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!orderNumber.trim()) {
-      // eslint-disable-next-line no-alert
-      alert('Please enter a valid order number.');
+    const trimmedOrderNumber = orderNumber.trim().toUpperCase();
+
+    if (!isValidScan(trimmedOrderNumber)) {
+      toast({
+        title: 'Invalid Order Number',
+        description: 'Please enter a valid Sales Order (SXXXXX) or Item Fulfillment (IFXXXXX) number.',
+        variant: 'destructive',
+      });
       return;
     }
-    // Get the current path and append the order number
-    const newPath = `${pathname}/${orderNumber}`;
-    // Redirect to the new path
-    router.push(newPath);
+
+    router.push(`/service/labelgenerator/${trimmedOrderNumber}`);
   };
 
   return (
-    <div className="flex w-full items-center justify-center bg-gray-100 pt-48">
-      <div className="w-full max-w-screen-lg rounded bg-white p-6 shadow-lg">
-        <h1 className="mb-4 text-center text-2xl font-bold">Order Lookup</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Enter Sales Order or Fulfillment Number"
-            value={orderNumber}
-            onChange={e => setOrderNumber(e.target.value)}
-            className="w-full rounded-md border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <button
-            type="submit"
-            className="w-full rounded-md bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          >
-            Submit
-          </button>
-        </form>
+    <div className="min-h-screen bg-gray-100 p-8">
+      <div className="mx-auto max-w-2xl">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="mb-6 text-center">
+              <h1 className="text-2xl font-bold">Label Generator</h1>
+              <p className="mt-2 text-gray-600">
+                Enter or scan a Sales Order (SXXXXX) or Item Fulfillment (IFXXXXX) number
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex space-x-4">
+                <Input
+                  type="text"
+                  placeholder="Enter Order Number"
+                  value={orderNumber}
+                  onChange={e => setOrderNumber(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="submit" className="bg-blue-500 hover:bg-blue-700">
+                  Generate Labels
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-6 text-center text-sm text-gray-500">
+              <p>You can also use a barcode scanner to automatically process orders</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
