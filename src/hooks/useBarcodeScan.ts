@@ -60,8 +60,8 @@ export const useBarcodeScan = ({ onScan, enabled = true }: BarcodeConfig = {}) =
           if (onScan) {
             onScan(scannedValue);
           } else {
-            // Default behavior: navigate to the order page
-            router.push(`/service/labelgenerator/${scannedValue}`);
+            // Default behavior: navigate to the order page with search param
+            router.push(`/service/labelgenerator/${scannedValue}?q=${scannedValue}`);
           }
         }
 

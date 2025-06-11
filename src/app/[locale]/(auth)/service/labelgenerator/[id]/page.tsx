@@ -1,8 +1,8 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,6 +11,11 @@ import { useToast } from '@/components/ui/use-toast';
 import { LabelPreview } from '@/features/labelGenerator/components/LabelPreview';
 import { OrderHeader } from '@/features/labelGenerator/components/OrderHeader';
 import { OrderItemTable } from '@/features/labelGenerator/components/OrderItemTable';
+import {
+  LabelPreviewSkeleton,
+  OrderHeaderSkeleton,
+  OrderItemTableSkeleton,
+} from '@/features/labelGenerator/components/Skeletons';
 import { useOrderData } from '@/features/labelGenerator/hooks/useOrderData';
 import { useOrderStore } from '@/features/labelGenerator/store/orderStore';
 import { useBarcodeScan } from '@/hooks/useBarcodeScan';
@@ -30,17 +35,17 @@ const queryClient = new QueryClient({
 function OrderPageContent(props: { params: { id: string } }) {
   const { id } = props.params;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { fetchOrderData } = useOrderData();
   const { isLoading, error } = useOrderStore();
-  const [orderNumber, setOrderNumber] = useState('');
 
   // Add barcode scanning
   useBarcodeScan({
     enabled: true,
     onScan: (barcode) => {
       if (barcode !== id) {
-        router.push(barcode);
+        router.push(`/service/labelgenerator/${barcode}?q=${barcode}`);
       }
     },
   });
@@ -54,7 +59,10 @@ function OrderPageContent(props: { params: { id: string } }) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    if (!orderNumber.trim()) {
+    const formData = new FormData(e.currentTarget);
+    const orderNumber = formData.get('orderNumber')?.toString().trim() ?? '';
+
+    if (!orderNumber) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -63,16 +71,8 @@ function OrderPageContent(props: { params: { id: string } }) {
       return;
     }
 
-    router.push(orderNumber);
+    router.push(`/service/labelgenerator/${orderNumber}?q=${orderNumber}`);
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div>Loading...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -111,9 +111,9 @@ function OrderPageContent(props: { params: { id: string } }) {
             >
               <Input
                 type="text"
+                name="orderNumber"
                 placeholder="Enter Sales Order or Fulfillment Number"
-                value={orderNumber}
-                onChange={e => setOrderNumber(e.target.value)}
+                defaultValue={searchParams.get('q') ?? ''}
               />
               <Button
                 className="bg-blue-500 hover:bg-blue-700"
@@ -127,13 +127,29 @@ function OrderPageContent(props: { params: { id: string } }) {
       </div>
 
       {/* Order Content */}
-      <OrderHeader />
-      <Card className="shadow">
-        <CardContent>
-          <OrderItemTable />
-          <LabelPreview />
-        </CardContent>
-      </Card>
+      {isLoading
+        ? (
+            <>
+              <OrderHeaderSkeleton />
+              <Card className="shadow">
+                <CardContent>
+                  <OrderItemTableSkeleton />
+                  <LabelPreviewSkeleton />
+                </CardContent>
+              </Card>
+            </>
+          )
+        : (
+            <>
+              <OrderHeader />
+              <Card className="shadow">
+                <CardContent>
+                  <OrderItemTable />
+                  <LabelPreview />
+                </CardContent>
+              </Card>
+            </>
+          )}
     </div>
   );
 }
