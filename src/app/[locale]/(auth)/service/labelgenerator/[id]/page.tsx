@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,6 @@ const queryClient = new QueryClient({
 function OrderPageContent(props: { params: { id: string } }) {
   const { id } = props.params;
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { fetchOrderData } = useOrderData();
   const { isLoading, error } = useOrderStore();
@@ -45,7 +44,7 @@ function OrderPageContent(props: { params: { id: string } }) {
     enabled: true,
     onScan: (barcode) => {
       if (barcode !== id) {
-        router.push(`/service/labelgenerator/${barcode}?q=${barcode}`);
+        router.push(`/service/labelgenerator/${barcode}`);
       }
     },
   });
@@ -71,7 +70,7 @@ function OrderPageContent(props: { params: { id: string } }) {
       return;
     }
 
-    router.push(`/service/labelgenerator/${orderNumber}?q=${orderNumber}`);
+    router.push(`/service/labelgenerator/${orderNumber}`);
   };
 
   if (error) {
@@ -113,7 +112,7 @@ function OrderPageContent(props: { params: { id: string } }) {
                 type="text"
                 name="orderNumber"
                 placeholder="Enter Sales Order or Fulfillment Number"
-                defaultValue={searchParams.get('q') ?? ''}
+                defaultValue={id}
               />
               <Button
                 className="bg-blue-500 hover:bg-blue-700"

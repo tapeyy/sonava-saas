@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-import type { ItemSplits, NetsuiteOrder } from './types';
+import type { ItemSplits, NetsuiteOrder, Split } from './types';
 
 type OrderState = {
   // Order Data
@@ -11,15 +11,15 @@ type OrderState = {
   // Selected Items
   selectedRows: string[];
   setSelectedRows: (rows: string[]) => void;
-  toggleRow: (itemId: string) => void;
+  toggleRow: (entryId: string) => void;
   markAll: (value: boolean) => void;
 
   // Split Items
   splitItems: ItemSplits;
   setSplitItems: (splits: ItemSplits) => void;
-  addSplit: (itemKey: string, totalQuantity: number) => void;
-  removeSplit: (itemKey: string) => void;
-  updateSplitQuantity: (itemKey: string, splitId: string, newQuantity: number) => void;
+  addSplit: (entryId: string, totalQuantity: number) => void;
+  removeSplit: (entryId: string) => void;
+  updateSplitQuantity: (entryId: string, splitId: string, newQuantity: number) => void;
 
   // Loading State
   isLoading: boolean;
@@ -35,16 +35,28 @@ export const useOrderStore = create<OrderState>()(
     (set, get) => ({
       // Order Data
       orderData: null,
-      setOrderData: order => set({ orderData: order }),
+      setOrderData: (order) => {
+        if (order) {
+          // Assign unique entryIds to items if they don't have one
+          const updatedItems = order.items.map(item => ({
+            ...item,
+            entryId: item.entryId || crypto.randomUUID(),
+          }));
+          set({ orderData: { ...order, items: updatedItems } });
+        } else {
+          set({ orderData: null });
+        }
+      },
 
       // Selected Items
       selectedRows: [],
       setSelectedRows: rows => set({ selectedRows: rows }),
-      toggleRow: itemId => set(state => ({
-        selectedRows: state.selectedRows.includes(itemId)
-          ? state.selectedRows.filter(id => id !== itemId)
-          : [...state.selectedRows, itemId],
-      })),
+      toggleRow: entryId =>
+        set(state => ({
+          selectedRows: state.selectedRows.includes(entryId)
+            ? state.selectedRows.filter(id => id !== entryId)
+            : [...state.selectedRows, entryId],
+        })),
       markAll: (value) => {
         const { orderData } = get();
         if (!orderData?.items) {
@@ -55,7 +67,7 @@ export const useOrderStore = create<OrderState>()(
           .filter(orderData.isSalesOrder
             ? item => item.quantityCommitted > 0
             : item => item.quantityOrdered > 0)
-          .map(item => item.item);
+          .map(item => item.entryId);
 
         set({ selectedRows: value ? selectableItems : [] });
       },
@@ -63,29 +75,29 @@ export const useOrderStore = create<OrderState>()(
       // Split Items
       splitItems: {},
       setSplitItems: splits => set({ splitItems: splits }),
-      addSplit: (itemKey, totalQuantity) => {
+      addSplit: (entryId, totalQuantity) => {
         const { splitItems } = get();
-        const currentSplits = splitItems[itemKey] || [];
+        const currentSplits = splitItems[entryId] || [];
 
         if (currentSplits.length === 0) {
           // Create initial two splits
           const firstSplitQuantity = Math.floor(totalQuantity / 2);
           const secondSplitQuantity = totalQuantity - firstSplitQuantity;
 
-          const newSplits = [
+          const newSplits: Split[] = [
             {
               id: crypto.randomUUID(),
               quantity: firstSplitQuantity,
-              parentItemId: itemKey,
+              parentEntryId: entryId,
             },
             {
               id: crypto.randomUUID(),
               quantity: secondSplitQuantity,
-              parentItemId: itemKey,
+              parentEntryId: entryId,
             },
           ];
 
-          set({ splitItems: { ...splitItems, [itemKey]: newSplits } });
+          set({ splitItems: { ...splitItems, [entryId]: newSplits } });
         } else {
           // Calculate current total of all splits
           const currentTotal = currentSplits.reduce((sum, split) => sum + split.quantity, 0);
@@ -93,13 +105,16 @@ export const useOrderStore = create<OrderState>()(
 
           if (remainingToSplit > 0) {
             // Add new carton with remaining quantity
-            const updatedSplits = [...currentSplits, {
-              id: crypto.randomUUID(),
-              quantity: remainingToSplit,
-              parentItemId: itemKey,
-            }];
+            const updatedSplits = [
+              ...currentSplits,
+              {
+                id: crypto.randomUUID(),
+                quantity: remainingToSplit,
+                parentEntryId: entryId,
+              },
+            ];
 
-            set({ splitItems: { ...splitItems, [itemKey]: updatedSplits } });
+            set({ splitItems: { ...splitItems, [entryId]: updatedSplits } });
           } else {
             // Split the largest existing carton
             const largestSplit = [...currentSplits].sort((a, b) => b.quantity - a.quantity)[0];
@@ -124,16 +139,16 @@ export const useOrderStore = create<OrderState>()(
             updatedSplits.push({
               id: crypto.randomUUID(),
               quantity: newSplitQuantity,
-              parentItemId: itemKey,
+              parentEntryId: entryId,
             });
 
-            set({ splitItems: { ...splitItems, [itemKey]: updatedSplits } });
+            set({ splitItems: { ...splitItems, [entryId]: updatedSplits } });
           }
         }
       },
-      removeSplit: (itemKey) => {
+      removeSplit: (entryId) => {
         const { splitItems } = get();
-        const currentSplits = splitItems[itemKey];
+        const currentSplits = splitItems[entryId];
 
         if (!currentSplits || currentSplits.length === 0) {
           return;
@@ -142,7 +157,7 @@ export const useOrderStore = create<OrderState>()(
         if (currentSplits.length === 2) {
           // Remove all splits to restore header quantity
           const newSplits = { ...splitItems };
-          delete newSplits[itemKey];
+          delete newSplits[entryId];
           set({ splitItems: newSplits });
         } else {
           // Merge last into second-last
@@ -159,17 +174,17 @@ export const useOrderStore = create<OrderState>()(
             quantity: secondLastCarton.quantity + lastCarton.quantity,
           };
 
-          set({ splitItems: { ...splitItems, [itemKey]: updatedSplits } });
+          set({ splitItems: { ...splitItems, [entryId]: updatedSplits } });
         }
       },
-      updateSplitQuantity: (itemKey, splitId, newQuantity) => {
+      updateSplitQuantity: (entryId, splitId, newQuantity) => {
         const { splitItems, orderData } = get();
-        const currentSplits = splitItems[itemKey];
+        const currentSplits = splitItems[entryId];
         if (!currentSplits?.length || !orderData) {
           return;
         }
 
-        const item = orderData.items.find(i => (i.item || i.itemId) === itemKey);
+        const item = orderData.items.find(i => i.entryId === entryId);
         if (!item) {
           return;
         }
@@ -195,12 +210,11 @@ export const useOrderStore = create<OrderState>()(
         }
 
         updatedSplits[splitIndex] = {
-          id: currentSplit.id,
-          parentItemId: currentSplit.parentItemId,
+          ...currentSplit,
           quantity: validQuantity,
         };
 
-        set({ splitItems: { ...splitItems, [itemKey]: updatedSplits } });
+        set({ splitItems: { ...splitItems, [entryId]: updatedSplits } });
       },
 
       // Loading State

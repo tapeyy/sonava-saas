@@ -24,13 +24,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 
 type CartonAllocatorProps = {
-  items: { itemId: string; item?: string }[];
+  items: { entryId: string; item?: string; itemId?: string }[];
   selectedItems: string[];
   onClose: () => void;
 };
 
 type CartonItem = {
-  itemId: string;
+  entryId: string;
   label: string;
   quantity: number;
 };
@@ -45,7 +45,7 @@ export function CartonAllocator({ items, selectedItems, onClose }: CartonAllocat
   const [cartons, setCartons] = useState<Carton[]>([{ id: 1, items: [] }]);
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
 
-  const availableItems = items.filter(i => selectedItems.includes(i.itemId));
+  const availableItems = items.filter(i => selectedItems.includes(i.entryId));
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -55,36 +55,36 @@ export function CartonAllocator({ items, selectedItems, onClose }: CartonAllocat
 
   const handleDrop = (event: DragEndEvent, cartonId: number) => {
     const { active } = event;
-    const draggedItem = availableItems.find(i => i.itemId === active.id);
+    const draggedItem = availableItems.find(i => i.entryId === active.id);
     if (!draggedItem) {
       return;
     }
 
-    const label = draggedItem.item || draggedItem.itemId;
-    const qty = quantities[draggedItem.itemId] || 1;
+    const label = draggedItem.item || draggedItem.itemId || 'Unknown Item';
+    const qty = quantities[draggedItem.entryId] || 1;
 
     setCartons(prev =>
       prev.map(c =>
         c.id === cartonId
           ? {
               ...c,
-              items: [...c.items, { itemId: draggedItem.itemId, label, quantity: qty }],
+              items: [...c.items, { entryId: draggedItem.entryId, label, quantity: qty }],
             }
           : c,
       ),
     );
   };
 
-  const handleRemoveItem = (cartonId: number, itemId: string) => {
+  const handleRemoveItem = (cartonId: number, entryId: string) => {
     setCartons(prev =>
       prev.map(c =>
-        c.id === cartonId ? { ...c, items: c.items.filter(i => i.itemId !== itemId) } : c,
+        c.id === cartonId ? { ...c, items: c.items.filter(i => i.entryId !== entryId) } : c,
       ),
     );
   };
 
-  const handleQuantityChange = (itemId: string, qty: number) => {
-    setQuantities(prev => ({ ...prev, [itemId]: qty }));
+  const handleQuantityChange = (entryId: string, qty: number) => {
+    setQuantities(prev => ({ ...prev, [entryId]: qty }));
   };
 
   const handlePrint = () => {
@@ -133,7 +133,7 @@ export function CartonAllocator({ items, selectedItems, onClose }: CartonAllocat
               <ul className="mb-4 space-y-1">
                 {carton.items.map(item => (
                   <li
-                    key={item.itemId}
+                    key={item.entryId}
                     className="flex items-center justify-between rounded bg-gray-100 px-2 py-1"
                   >
                     {item.label}
@@ -142,7 +142,7 @@ export function CartonAllocator({ items, selectedItems, onClose }: CartonAllocat
                     {item.quantity}
                     <Button
                       variant="ghost"
-                      onClick={() => handleRemoveItem(carton.id, item.itemId)}
+                      onClick={() => handleRemoveItem(carton.id, item.entryId)}
                     >
                       ✕
                     </Button>
@@ -155,18 +155,18 @@ export function CartonAllocator({ items, selectedItems, onClose }: CartonAllocat
                 onDragEnd={e => handleDrop(e, carton.id)}
               >
                 <SortableContext
-                  items={availableItems.map(i => i.itemId)}
+                  items={availableItems.map(i => i.entryId)}
                   strategy={verticalListSortingStrategy}
                 >
                   {availableItems
                     .filter(i =>
-                      !cartons.some(c => c.items.find(x => x.itemId === i.itemId)),
+                      !cartons.some(c => c.items.find(x => x.entryId === i.entryId)),
                     )
                     .map(item => (
                       <DraggableItem
-                        key={item.itemId}
-                        id={item.itemId}
-                        label={item.item || item.itemId}
+                        key={item.entryId}
+                        id={item.entryId}
+                        label={item.item || item.itemId || 'Unknown Item'}
                         quantities={quantities}
                         handleQuantityChange={handleQuantityChange}
                       />
@@ -202,29 +202,36 @@ function DraggableItem({
   id: string;
   label: string;
   quantities: { [key: string]: number };
-  handleQuantityChange: (itemId: string, qty: number) => void;
+  handleQuantityChange: (entryId: string, qty: number) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
-      style={style}
-      className="cursor-move rounded border bg-blue-100 p-2"
+      className="mb-2 flex items-center justify-between rounded bg-gray-50 p-2"
     >
-      {label}
+      <span>{label}</span>
       <Input
         type="number"
-        min={1}
-        className="mt-1"
-        value={quantities[id] || ''}
-        onChange={e => handleQuantityChange(id, Number.parseInt(e.target.value))}
-        placeholder="Qty"
+        min="1"
+        value={quantities[id] || 1}
+        onChange={e => handleQuantityChange(id, Number.parseInt(e.target.value, 10) || 1)}
+        className="ml-2 w-20"
       />
     </div>
   );

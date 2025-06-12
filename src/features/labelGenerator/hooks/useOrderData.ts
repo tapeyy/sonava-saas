@@ -61,21 +61,27 @@ export const useOrderData = () => {
         return 0;
       });
 
+      // Add entryId to each item if not present
+      const itemsWithEntryId = sortedItems.map(item => ({
+        ...item,
+        entryId: item.entryId || crypto.randomUUID(),
+      }));
+
       const orderWithSortedItems: NetsuiteOrder = {
         ...data.order,
-        items: sortedItems,
+        items: itemsWithEntryId,
       };
 
       setOrderData(orderWithSortedItems);
 
-      // Auto-select items with appropriate quantity
-      const autoSelected = sortedItems
+      // Auto-select items with appropriate quantity using entryId
+      const autoSelected = itemsWithEntryId
         .filter(
           orderWithSortedItems.isSalesOrder
             ? (item: { quantityCommitted: number }) => item.quantityCommitted > 0
             : (item: { quantityOrdered: number }) => item.quantityOrdered > 0,
         )
-        .map(item => item.item);
+        .map(item => item.entryId);
 
       useOrderStore.getState().setSelectedRows(autoSelected);
     } catch (err: any) {

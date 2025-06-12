@@ -62,22 +62,21 @@ export const OrderItemTable = () => {
         </TableHeader>
         <TableBody>
           {orderData.items.map((item) => {
-            const itemKey = item.item || item.itemId;
-            const splits = splitItems[itemKey] || [];
+            const splits = splitItems[item.entryId] || [];
             const isDisabled = !item?.quantityCommitted || item.quantityCommitted === 0;
             const totalQuantity = orderData.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
             const hasSplits = splits.length > 0;
 
             return (
-              <React.Fragment key={itemKey}>
+              <React.Fragment key={item.entryId}>
                 {/* Header row */}
                 <TableRow className="bg-gray-50">
                   <TableCell>
                     <input
                       type="checkbox"
                       className="size-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={selectedRows.includes(itemKey)}
-                      onChange={() => toggleRow(itemKey)}
+                      checked={selectedRows.includes(item.entryId)}
+                      onChange={() => toggleRow(item.entryId)}
                       disabled={isDisabled}
                     />
                   </TableCell>
@@ -101,7 +100,7 @@ export const OrderItemTable = () => {
                     {!isDisabled && (
                       <CartonSplitManager
                         item={item}
-                        itemKey={itemKey}
+                        itemKey={item.entryId}
                       />
                     )}
                   </TableCell>
@@ -128,7 +127,7 @@ export const OrderItemTable = () => {
                           value={split.quantity}
                           onChange={(e) => {
                             const newQuantity = Number.parseInt(e.target.value) || 0;
-                            updateSplitQuantity(itemKey, split.id, newQuantity);
+                            updateSplitQuantity(item.entryId, split.id, newQuantity);
                           }}
                           className="w-20 text-center"
                           min="0"

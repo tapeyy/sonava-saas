@@ -26,6 +26,7 @@ export const CartonSplitManager = ({ item, itemKey }: CartonSplitManagerProps) =
   const totalQuantity = orderData.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
   const splits = splitItems[itemKey] || [];
   const hasSplits = splits.length > 0;
+  const canSplit = totalQuantity > 1;
 
   const handleAddSplit = () => {
     if (!totalQuantity) {
@@ -33,6 +34,15 @@ export const CartonSplitManager = ({ item, itemKey }: CartonSplitManagerProps) =
         variant: 'destructive',
         title: 'Cannot split item',
         description: 'This item has no quantity to split.',
+      });
+      return;
+    }
+
+    if (!canSplit) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot split item',
+        description: 'Items with quantity of 1 or less cannot be split.',
       });
       return;
     }
@@ -47,7 +57,7 @@ export const CartonSplitManager = ({ item, itemKey }: CartonSplitManagerProps) =
     } else {
       toast({
         title: 'New carton added',
-        description: `Split adjusted`,
+        description: 'Split adjusted',
       });
     }
   };
@@ -77,10 +87,16 @@ export const CartonSplitManager = ({ item, itemKey }: CartonSplitManagerProps) =
     <div className="flex items-center justify-center space-x-2">
       <button
         type="button"
-        className="inline-flex size-8 items-center justify-center rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        className={`inline-flex size-8 items-center justify-center rounded-md border border-gray-300 bg-white text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+          canSplit
+            ? 'text-gray-700 hover:bg-blue-50 focus:ring-blue-500'
+            : 'cursor-not-allowed text-gray-400'
+        }`}
         onClick={handleAddSplit}
+        disabled={!canSplit}
+        title={!canSplit ? 'Items with quantity of 1 or less cannot be split' : undefined}
       >
-        <PlusCircle className="size-4 text-blue-500" />
+        <PlusCircle className={`size-4 ${canSplit ? 'text-blue-500' : 'text-gray-400'}`} />
       </button>
       {hasSplits && (
         <button

@@ -20,14 +20,13 @@ export const LabelPreview = () => {
     const invalidItems = [];
 
     for (const item of orderData.items) {
-      const itemKey = item.item || item.itemId;
-      const splits = splitItems[itemKey];
+      const splits = splitItems[item.entryId];
       const totalQuantity = orderData.isSalesOrder ? item.quantityCommitted : item.quantityOrdered;
 
       if (splits && splits.length > 0) {
         const splitSum = splits.reduce((sum, split) => sum + split.quantity, 0);
         if (splitSum !== totalQuantity) {
-          invalidItems.push(itemKey);
+          invalidItems.push(item.entryId);
         }
       }
     }
@@ -48,11 +47,11 @@ export const LabelPreview = () => {
     // Validate split quantities before printing
     const invalidItems = validateSplitQuantities();
     if (invalidItems.length > 0) {
-      const itemNames = invalidItems.map((itemKey) => {
-        const item = orderData.items.find(i => (i.item || i.itemId) === itemKey);
+      const itemNames = invalidItems.map((entryId) => {
+        const item = orderData.items.find(i => i.entryId === entryId);
         return orderData.isSalesOrder
-          ? (item?.item ? item.item.split(' ')[0] : itemKey)
-          : item?.itemId || itemKey;
+          ? (item?.item ? item.item.split(' ')[0] : 'Unknown Item')
+          : item?.itemId || 'Unknown Item';
       });
 
       toast({
@@ -64,12 +63,11 @@ export const LabelPreview = () => {
     }
 
     const selectedItems = orderData.items.filter(item =>
-      selectedRows.includes(item.item),
+      selectedRows.includes(item.entryId),
     );
 
     const printItems = selectedItems.flatMap((item: any) => {
-      const itemKey = item.item || item.itemId;
-      const splits = splitItems[itemKey];
+      const splits = splitItems[item.entryId];
 
       if (!splits || splits.length === 0) {
         // If no splits, print the full quantity
@@ -93,10 +91,8 @@ export const LabelPreview = () => {
       <div class="label" style="width: 100mm; height: 150mm; border: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 10px; box-sizing: border-box; page-break-after: always;">
         <!-- Header Section -->
         <div style="width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
-          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">PO #: ${orderData.poNumber
-          }</h1>
-          <p style="font-size: 14px; margin: 0; color: #555;">${orderData.isSalesOrder ? 'Order #' : 'Fulfillment #'}: ${orderData.tranId.toUpperCase()
-          }</p>
+          <h1 style="font-size: 20px; font-weight: bold; margin: 0; text-transform: uppercase;">PO #: ${orderData.poNumber || 'N/A'}</h1>
+          <p style="font-size: 14px; margin: 0; color: #555;">${orderData.isSalesOrder ? 'Order #' : 'Fulfillment #'}: ${orderData.tranId.toUpperCase()}</p>
         </div>
 
         <!-- Logo Section -->
@@ -198,7 +194,8 @@ export const LabelPreview = () => {
         ${printContent}
       </body>
     </html>
-  `);
+    `);
+
     printWindow.document.close();
     // Add a delay to ensure images load before printing
     setTimeout(() => {
